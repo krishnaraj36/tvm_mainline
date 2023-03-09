@@ -105,8 +105,10 @@ StorageToken* TokenAllocator2D::Request(StorageToken* prototype) {
   const int64_t max_ratio = 5;
   int64_t min_added_size_x = std::numeric_limits<int64_t>::max();
   int64_t min_added_size_y = std::numeric_limits<int64_t>::max();
+  int64_t min_added_size_z = std::numeric_limits<int64_t>::max();
   int64_t min_wasted_size_x = std::numeric_limits<int64_t>::max();
   int64_t min_wasted_size_y = std::numeric_limits<int64_t>::max();
+  int64_t min_wasted_size_z = std::numeric_limits<int64_t>::max();
   int64_t best_storage_id = -1;
   MemBlock new_mem;
   for (int64_t free_id : free_list_) {
@@ -124,37 +126,48 @@ StorageToken* TokenAllocator2D::Request(StorageToken* prototype) {
     }
     // avoid reusing too small and too big textures
     if (shape.width / cached.x_ > max_ratio || cached.x_ / shape.width > max_ratio ||
-        shape.height / cached.y_ > max_ratio || cached.y_ / shape.height > max_ratio) {
+        shape.height / cached.y_ > max_ratio || cached.y_ / shape.height > max_ratio ||
+        shape.depth / cached.z_ > max_ratio || cached.z_ / shape.depth > max_ratio) {
       continue;
     }
     int64_t new_width = std::max(cached.x_, shape.width);
     int64_t new_height = std::max(cached.y_, shape.height);
+    int64_t new_depth = std::max(cached.z_, shape.depth);
     int64_t added_size_x = new_width - cached.x_;
     int64_t added_size_y = new_height - cached.y_;
+    int64_t added_size_z = new_depth - cached.z_;
     int64_t wasted_size_x = new_width - shape.width;
     int64_t wasted_size_y = new_height - shape.height;
+    int64_t wasted_size_z = new_depth - shape.depth;
     // Prioritize minimization of added size first, then minimize
     // wasted size among blocks which would not require expansion
     if ((min_added_size_x > 0 && added_size_x < min_added_size_x) ||
         (min_added_size_y > 0 && added_size_y < min_added_size_y) ||
+        (min_added_size_z > 0 && added_size_z < min_added_size_z) ||
         (min_added_size_x == added_size_x && wasted_size_x < min_wasted_size_x) ||
-        (min_added_size_y == added_size_y && wasted_size_y < min_wasted_size_y)) {
+        (min_added_size_y == added_size_y && wasted_size_y < min_wasted_size_y) ||
+        (min_added_size_z == added_size_z && wasted_size_z < min_wasted_size_z)) {
       min_added_size_x = added_size_x;
       min_added_size_y = added_size_y;
+      min_added_size_z = added_size_z;
       min_wasted_size_x = wasted_size_x;
       min_wasted_size_y = wasted_size_y;
+      min_wasted_size_z = wasted_size_z;
       best_storage_id = free_id;
       new_mem.x_ = new_width;
       new_mem.y_ = new_height;
+      new_mem.z_ = new_depth;
     }
   }
 
-  if (min_added_size_x == 0 && min_added_size_y == 0) {
+  if (min_added_size_x == 0 && min_added_size_y == 0 && min_added_size_z == 0) {
     // use existing block
     free_list_.erase(best_storage_id);
     blocks_[best_storage_id].token_->ref_counter += prototype->ref_counter;
     return blocks_[best_storage_id].token_;
-  } else if (min_added_size_x <= shape.width || min_added_size_y <= shape.height) {
+  } else if (min_added_size_x <= shape.width ||
+             min_added_size_y <= shape.height ||
+             min_added_size_y <= shape.height) {
     // Reset the reference counter of the now live token
     free_list_.erase(best_storage_id);
     new_mem.token_ = prototype;
@@ -171,6 +184,7 @@ StorageToken* TokenAllocator2D::Alloc(StorageToken* prototype, int64_t storage_i
   MemBlock block;
   block.x_ = shape.width;
   block.y_ = shape.height;
+  block.z_ = shape.depth;
   prototype->storage_id = storage_id;
   block.token_ = prototype;
   blocks_[prototype->storage_id] = block;

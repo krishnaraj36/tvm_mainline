@@ -69,7 +69,7 @@ ImageInfo GetImageInfo(const cl::BufferDescriptor* desc, const DLTensor* tensor)
   auto texture_shape = ApplyTexture2DFlattening<int64_t>(tensor->shape, tensor->ndim, axis);
   info.region[0] = texture_shape.width;
   info.region[1] = texture_shape.height;
-  info.region[2] = 1;
+  info.region[2] = texture_shape.depth;
   return info;
 }
 
@@ -245,7 +245,7 @@ void* OpenCLWorkspace::AllocDataSpace(Device dev, int ndim, const int64_t* shape
   cl::BufferDescriptor* desc = new cl::BufferDescriptor(mem_scope);
   size_t axis = DefaultTextureLayoutSeparator(ndim, mem_scope.value());
   auto texture = ApplyTexture2DFlattening<int64_t>(shape, ndim, axis);
-  desc->buffer = AllocTexture(dev, texture.width, texture.height, dtype);
+  desc->buffer = AllocTexture(dev, texture.width, texture.height, texture.depth, dtype);
   return desc;
 }
 
@@ -269,14 +269,14 @@ void OpenCLWorkspace::FreeDataSpace(Device dev, void* ptr) {
 }
 
 cl_mem OpenCLWorkspace::AllocTexture(Device dev, size_t width, size_t height,
-                                     DLDataType type_hint) {
+                                     size_t depth, DLDataType type_hint) {
   this->Init();
   cl_device_id device_id = GetCLDeviceID(dev.device_id);
   auto platform = device_to_platform[device_id];
   cl_int err_code;
   cl_channel_type cl_type = DTypeToOpenCLChannelType(type_hint);
   cl_image_format format = {CL_RGBA, cl_type};
-  cl_image_desc descriptor = {CL_MEM_OBJECT_IMAGE2D, width, height, 0, 0, 0, 0, 0, 0};
+  cl_image_desc descriptor = {CL_MEM_OBJECT_IMAGE2D_ARRAY, width, height, 0, depth, 0, 0, 0, 0};
   cl_mem mptr = clCreateImage(this->contexts[platform], CL_MEM_CREATE_FLAGS, &format, &descriptor,
                               nullptr, &err_code);
   OPENCL_CHECK_ERROR(err_code);
@@ -284,8 +284,8 @@ cl_mem OpenCLWorkspace::AllocTexture(Device dev, size_t width, size_t height,
 }
 
 void* OpenCLWorkspace::AllocTextureWorkspace(Device dev, size_t width, size_t height,
-                                             DLDataType type_hint) {
-  return GetThreadEntry()->texture_pool.AllocTexture(dev, width, height, type_hint);
+                                             size_t depth, DLDataType type_hint) {
+  return GetThreadEntry()->texture_pool.AllocTexture(dev, width, height, depth, type_hint);
 }
 
 void OpenCLWorkspace::FreeTextureWorkspace(Device dev, void* ptr) {
@@ -540,7 +540,7 @@ TVM_REGISTER_GLOBAL("device_api.opencl.alloc_nd").set_body([](TVMArgs args, TVMR
   int64_t* shape = static_cast<int64_t*>(static_cast<void*>(args[6]));
   int64_t width = shape[0];
   int64_t height = shape[1];
-
+  int64_t depth = shape[2];
   Device dev;
   dev.device_type = static_cast<DLDeviceType>(device_type);
   dev.device_id = device_id;
@@ -552,7 +552,7 @@ TVM_REGISTER_GLOBAL("device_api.opencl.alloc_nd").set_body([](TVMArgs args, TVMR
 
   OpenCLWorkspace* ptr = OpenCLWorkspace::Global();
   *rv = ptr->AllocTextureWorkspace(dev, static_cast<size_t>(width), static_cast<size_t>(height),
-                                   type_hint);
+                                   static_cast<size_t>(depth), type_hint);
 });
 
 TVM_REGISTER_GLOBAL("device_api.opencl.free_nd").set_body([](TVMArgs args, TVMRetValue* rv) {

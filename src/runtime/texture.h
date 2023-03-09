@@ -38,6 +38,7 @@ template <typename T>
 struct Texture2DShape {
   T width;
   T height;
+  T depth;
   T channel;
 };
 
@@ -49,12 +50,12 @@ struct Texture2DShape {
 inline size_t DefaultTextureLayoutSeparator(size_t shape_rank,
                                             std::string convention = "global.texture") {
   // Texture activation:
-  // e.g. [N,C,H,W,c] -> Texture2d[N*C*H, W, c]
+  // e.g. [N,C,H,W,c] -> Texture2d[N*C, H, W, c]
   // Texture weight:
-  // e.g. [O,I,H,W,c] -> Texture2d[O, I*H*W, c]
+  // e.g. [O,I,H,W,c] -> Texture2d[O, I, H*W, c]
   size_t separator = 0;
   if (convention == "global.texture") {
-    separator = shape_rank - 2;
+    separator = shape_rank - 3;
   } else if (convention == "global.texture-weight") {
     separator = 1;
   } else if (convention == "global.texture-nhwc") {
@@ -63,6 +64,7 @@ inline size_t DefaultTextureLayoutSeparator(size_t shape_rank,
     } else {
       separator = 2;
     }
+    separator = shape_rank - 3;
   } else {
     LOG(FATAL) << "Encountered unknown texture lowering convention: " << convention;
   }
@@ -79,9 +81,11 @@ template <typename T, typename S>
 Texture2DShape<T> ApplyTexture2DFlattening(const S& shape, size_t rank, size_t axis) {
   ICHECK(axis < rank)
       << "Number of axes to flatten into rows must be less than shape rank for 2d flattening";
-  Texture2DShape<T> texture{1, 1, shape[rank - 1]};
+  Texture2DShape<T> texture{1, 1, 1, shape[rank - 1]};
   for (size_t i = 0; i < rank - 1; i++) {
     if (i < axis) {
+      texture.depth *= shape[i];
+    } else if (i == axis) {
       texture.height *= shape[i];
     } else {
       texture.width *= shape[i];
@@ -97,7 +101,8 @@ inline bool IsTextureStorage(std::string scope) {
 class TVM_DLL Pool2D {
  public:
   Pool2D() = default;
-  void* Alloc(Device dev, DeviceAPI* device, size_t width, size_t height, DLDataType type_hint);
+  void* Alloc(Device dev, DeviceAPI* device, size_t width, size_t height, size_t depth,
+              DLDataType type_hint);
   void Free(void* data);
   // Release all resources immediately
   void Release(Device dev, DeviceAPI* device);
@@ -107,6 +112,7 @@ class TVM_DLL Pool2D {
     void* data;
     size_t x;
     size_t y;
+    size_t z;
     DLDataType type;
   };
   std::vector<Entry> free_list_;
@@ -145,7 +151,7 @@ class TVM_DLL TexturePool {
    * \param height The height of the 2d texture to be allocated.
    * \param type_hint The type of elements.
    */
-  void* AllocTexture(Device dev, size_t width, size_t height, DLDataType type_hint);
+  void* AllocTexture(Device dev, size_t width, size_t height, size_t depth, DLDataType type_hint);
   /*!
    * \brief Free temporal texture in backend execution.
    *

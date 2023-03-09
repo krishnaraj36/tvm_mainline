@@ -318,8 +318,8 @@ class OpenCLWorkspace : public DeviceAPI {
   void FreeWorkspace(Device dev, void* data) final;
 
   // Texture (image2d_t) alloca APIs
-  cl_mem AllocTexture(Device dev, size_t width, size_t height, DLDataType type_hint);
-  void* AllocTextureWorkspace(Device dev, size_t width, size_t height, DLDataType type_hint);
+  cl_mem AllocTexture(Device dev, size_t width, size_t height, size_t depth, DLDataType type_hint);
+  void* AllocTextureWorkspace(Device dev, size_t width, size_t height, size_t depth, DLDataType type_hint);
   void FreeTextureWorkspace(Device dev, void* data);
 
   /*!

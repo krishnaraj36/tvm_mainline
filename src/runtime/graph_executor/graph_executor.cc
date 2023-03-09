@@ -429,16 +429,17 @@ void GraphExecutor::SetupStorage() {
       pool_entry[sid].dtype = DLDataType{kDLFloat, 32, 1};
     } else {
       if (pool_entry[sid].shape.size() == 1) {
-        pool_entry[sid].shape.resize(3, 0);
+        pool_entry[sid].shape.resize(4, 0);
       }
       size_t axis = runtime::DefaultTextureLayoutSeparator(attrs_.shape[i].size(), storage_scope);
       auto shape = ApplyTexture2DFlattening<int64_t>(attrs_.shape[i], attrs_.shape[i].size(), axis);
-      pool_entry[sid].shape[0] = std::max(pool_entry[sid].shape[0], shape.height);
-      pool_entry[sid].shape[1] = std::max(pool_entry[sid].shape[1], shape.width);
-      CHECK(pool_entry[sid].shape[2] == 0 || pool_entry[sid].shape[2] == shape.channel)
-          << pool_entry[sid].shape[2] << " != " << shape.channel
+      pool_entry[sid].shape[0] = std::max(pool_entry[sid].shape[0], shape.depth);
+      pool_entry[sid].shape[1] = std::max(pool_entry[sid].shape[1], shape.height);
+      pool_entry[sid].shape[2] = std::max(pool_entry[sid].shape[2], shape.width);
+      CHECK(pool_entry[sid].shape[3] == 0 || pool_entry[sid].shape[3] == shape.channel)
+          << pool_entry[sid].shape[3] << " != " << shape.channel
           << ",  texture channel length must be consistent within a storage pool";
-      pool_entry[sid].shape[2] = shape.channel;
+      pool_entry[sid].shape[3] = shape.channel;
       CHECK(pool_entry[sid].dtype.bits == 0 || TypeEqual(pool_entry[sid].dtype, t))
           << DLDataType2String(pool_entry[sid].dtype) << " != " << DLDataType2String(t)
           << ", pool entry for 2d texure allocations must be of the same type;"

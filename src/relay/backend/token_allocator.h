@@ -149,6 +149,7 @@ class TokenAllocator2D {
     StorageToken* token_;
     int64_t x_;
     int64_t y_;
+    int64_t z_;
   };
 
   std::unordered_map<int64_t, MemBlock> blocks_;
