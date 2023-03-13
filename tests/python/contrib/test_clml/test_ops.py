@@ -23,7 +23,7 @@ from tvm.relay.op.contrib import clml
 from tvm.relay import testing
 from tvm.ir import IRModule
 from tvm.contrib import utils
-from test_clml.infrastructure import (
+from infrastructure import (
     build_and_run,
     Device,
     skip_codegen_test,
@@ -180,13 +180,13 @@ def _get_conv_expected_codegen(
     inputs.append(node)
     return inputs
 
-
+from autotvm_tune import autotvm_tune
 @pytest.mark.parametrize("dtype", ["float32"])
 @tvm.testing.requires_openclml
 def test_conv2d(device, dtype):
     trials = [
         # Normal convolution
-        [3, 3, (1, 1), (1, 1), (1, 1), 4, (14, 10, 10), (False, False, False), False],
+        [3, 3, (0, 0), (1, 1), (1, 1), 256, (256, 16, 16), (False, True, False), False],
         [2, 1, (2, 2), (1, 1), (1, 1), 7, (15, 16, 12), (True, False, True), False],
         [3, 3, (2, 1), (1, 1), (1, 1), 4, (14, 10, 10), (False, True, False), False],
         [3, 3, (2, 1), (1, 1), (1, 1), 4, (14, 10, 10), (False, True, True), False],
@@ -244,7 +244,9 @@ def test_conv2d(device, dtype):
             has_bias=composite[1],
             has_activation=composite[2],
         )
+        #autotvm_tune(tvm.IRModule.from_expr(func), params, device.target, "conv_1x1_c256_texture2d_array.log")
         opencl_out = build_and_run(func, inputs, 1, params, device, enable_clml=False)[0]
+        
         clml_out = build_and_run(func, inputs, 1, params, device, enable_clml=True)[0]
 
         tvm.testing.assert_allclose(
@@ -677,4 +679,5 @@ def test_resize_bilinear(device, dtype):
 
 
 if __name__ == "__main__":
-    tvm.testing.main()
+    test_conv2d(Device(), "float32")
+    #tvm.testing.main()

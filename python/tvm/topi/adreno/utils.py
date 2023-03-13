@@ -579,15 +579,23 @@ def get_texture_storage(shape):
     # certain limitation of the Qualcomm devices. Subject to be determined for certain device
     # individually, but until we have access to remote device during compilation, we have to
     # define it uniformly for all target devices
-    # limit = 16384
-    limit = tvm.target.Target.current().attrs["texture_spatial_limit"]
+    # spatial_limit = 16384, depth_limit = 2048
+    spatial_limit = tvm.target.Target.current().attrs["texture_spatial_limit"]
+    depth_limit = tvm.target.Target.current().attrs["texture_depth_limit"]
+    d1r = shape[0] * shape[1];
+    d2r = shape[2] * shape[3];
+    d3r = shape[1] * shape[2] * shape[3];
+      
+    scope = "global";
+    if d1r < depth_limit:
+        scope += ".texture"
+    elif (shape[0] < depth_limit and d2r < spatial_limit):
+        scope += ".texture-weight"
+    elif (shape[0] < spatial_limit and d3r < spatial_limit):
+        scope += ".texture-nhwc"
 
-    if shape[0] * shape[1] * shape[2] < limit and shape[3] < limit:
-        return "global.texture"
-    elif shape[0] * shape[1] < limit and shape[2] * shape[3] < limit:
-        return "global.texture-nhwc"
-    else:
-        return "global.texture-weight"
+    return scope
+
 
 
 @register_func("tvm.info.mem.global.texture")
@@ -597,7 +605,7 @@ def mem_info_global_texture_variants():
     return tvm.ir.make_node(
         "MemoryInfo",
         unit_bits=16,
-        max_num_bits=16384 * 16384 * 4 * 32,
+        max_num_bits=2048 * 16384 * 16384 * 4 * 32,
         max_simd_bits=4 * 32,
         head_address=None,
     )

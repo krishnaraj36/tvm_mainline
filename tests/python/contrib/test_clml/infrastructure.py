@@ -75,7 +75,7 @@ class Device:
     connection_type = "tracker"
     host = os.getenv("TVM_TRACKER_HOST", "localhost")
     port = int(os.getenv("TVM_TRACKER_PORT", 9090))
-    target = "opencl"
+    target = "opencl -device=adreno"
     target_host = "llvm -mtriple=aarch64-linux-gnu"
     device_key = os.getenv("RPC_DEVICE_KEY", "android")
     cross_compile = os.getenv("TVM_NDK_CC", "aarch64-linux-android-g++")
@@ -133,7 +133,7 @@ def build_module(mod, target, target_host, params=None, enable_clml=True, tune_l
         mod = tvm.IRModule.from_expr(mod)
 
     with autotvm.apply_history_best(tune_log):
-        with tvm.transform.PassContext(opt_level=3, disabled_pass=["AlterOpLayout"]):
+        with tvm.transform.PassContext(opt_level=3):
             if enable_clml:
                 mod = clml.partition_for_clml(mod, params)
             relay.backend.te_compiler.get().clear()
@@ -165,7 +165,7 @@ def build_and_run(
             err_msg += f"The test failed with the following parameters: {config}\n"
         err_msg += str(e)
         raise Exception(err_msg)
-
+    #print(libm.get_lib().imported_modules[0].get_source())
     lib = update_lib(libm, device.device, device.cross_compile)
     gen_module = graph_executor.GraphModule(lib["default"](device.device.cl(0)))
     gen_module.set_input(**inputs)
@@ -173,9 +173,9 @@ def build_and_run(
     for _ in range(no_runs):
         gen_module.run()
         out.append([gen_module.get_output(i) for i in range(outputs)])
-    # time_f = gen_module.module.time_evaluator("run", device.device.cl(0), number=1)
-    # cost = time_f().mean
-    # print("%g secs/iteration\n" % cost)
+    time_f = gen_module.module.time_evaluator("run", device.device.cl(0), number=1)
+    cost = time_f().mean
+    print("%g secs/iteration\n" % cost)
     return out
 
 

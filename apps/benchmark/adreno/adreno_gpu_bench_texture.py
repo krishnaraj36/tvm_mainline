@@ -31,6 +31,7 @@ from tvm import relay
 from tvm import autotvm
 from tvm.contrib import utils, ndk
 
+os.environ["CUDA_VISIBLE_DEVICES"]="0"
 
 def get_network(name, batch_size, dtype="float32"):
     """Get the symbol definition and random weight of a network
@@ -145,7 +146,7 @@ def tune_tasks(
 def evaluate_network(network, target, target_host, dtype, repeat):
     print_progress(network)
     net, params, input_shape, output_shape = get_network(network, batch_size=1, dtype=dtype)
-
+    print(net)
     # Auto Tuning
     tune_log = "adreno-" + network + "-" + dtype + ".log"
     tuning_options = {
@@ -242,14 +243,14 @@ if __name__ == "__main__":
 
     if args.network is None:
         networks = [
+            "mobilenet",
             "resnet-18",
             "resnet-34",
             "resnet-50",
+            "inception_v3",
             "vgg-16",
             "vgg-19",
             "densenet-121",
-            "inception_v3",
-            "mobilenet",
             "squeezenet_v1.0",
             "squeezenet_v1.1",
         ]
@@ -264,12 +265,16 @@ if __name__ == "__main__":
     print("--------------------------------------------------")
 
     results = {}
-
+    net_results = []
     for network in networks:
         ftime = evaluate_network(network, target, target_host, "float32", args.repeat)
         results[network + "-float32"] = ftime
+        net_results.append([network + "-float32"]+ftime)
+        np.savetxt("results.txt", np.array(net_results), fmt="%s")
         ftime = evaluate_network(network, target, target_host, "float16", args.repeat)
         results[network + "-float16"] = ftime
+        net_results.append([network + "-float32"]+ftime)
+        np.savetxt("results.txt", np.array(net_results), fmt="%s")
 
     print("----------------------------------------------------------------------")
     print("%-30s %-30s" % ("Network Name", "Mean Inference Time        (std dev)"))
