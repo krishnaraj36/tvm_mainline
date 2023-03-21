@@ -146,7 +146,6 @@ def tune_tasks(
 def evaluate_network(network, target, target_host, dtype, repeat):
     print_progress(network)
     net, params, input_shape, output_shape = get_network(network, batch_size=1, dtype=dtype)
-    print(net)
     # Auto Tuning
     tune_log = "adreno-" + network + "-" + dtype + ".log"
     tuning_options = {
@@ -185,7 +184,6 @@ def evaluate_network(network, target, target_host, dtype, repeat):
             )
 
     tmp = tempdir()
-
     filename = "%s.so" % network
     lib.export_library(tmp.relpath(filename), ndk.create_shared)
 
@@ -203,7 +201,7 @@ def evaluate_network(network, target, target_host, dtype, repeat):
     module = runtime.GraphModule(rlib["default"](dev))
     data_tvm = tvm.nd.array((np.random.uniform(size=input_shape)).astype(dtype))
     module.set_input("data", data_tvm)
-
+    module.run()
     # evaluate
     print_progress("%-20s evaluating..." % network)
     ftimer = module.module.time_evaluator("run", dev, number=1, repeat=repeat)
@@ -239,6 +237,7 @@ if __name__ == "__main__":
     parser.add_argument("--rpc-key", type=str, default="android")
     parser.add_argument("--repeat", type=int, default=30)
     parser.add_argument("--tune", type=bool, default=False)
+    parser.add_argument("--dtype", type=str, default=None)
     args = parser.parse_args()
 
     if args.network is None:
@@ -257,6 +256,11 @@ if __name__ == "__main__":
     else:
         networks = [args.network]
 
+    if args.dtype is None:
+        dtypes = ["float32", "float16"]
+    else:
+        dtypes = [args.dtype]
+
     target = "opencl -device=adreno"
     target_host = "llvm -mtriple=arm64-linux-android"
 
@@ -265,16 +269,10 @@ if __name__ == "__main__":
     print("--------------------------------------------------")
 
     results = {}
-    net_results = []
     for network in networks:
-        ftime = evaluate_network(network, target, target_host, "float32", args.repeat)
-        results[network + "-float32"] = ftime
-        net_results.append([network + "-float32"]+ftime)
-        np.savetxt("results.txt", np.array(net_results), fmt="%s")
-        ftime = evaluate_network(network, target, target_host, "float16", args.repeat)
-        results[network + "-float16"] = ftime
-        net_results.append([network + "-float32"]+ftime)
-        np.savetxt("results.txt", np.array(net_results), fmt="%s")
+        for dtype in dtypes:
+            ftime = evaluate_network(network, target, target_host, dtype, args.repeat)
+            results[network + "-" + dtype] = ftime
 
     print("----------------------------------------------------------------------")
     print("%-30s %-30s" % ("Network Name", "Mean Inference Time        (std dev)"))

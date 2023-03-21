@@ -55,11 +55,14 @@ inline size_t DefaultTextureLayoutSeparator(size_t shape_rank,
   // e.g. [O,I,H,W,c] -> Texture2d[O, I, H*W, c]
   size_t separator = 0;
   if (convention == "global.texture") {
-    separator = shape_rank - 3;
+    separator = shape_rank - 2;
   } else if (convention == "global.texture-weight") {
-    separator = 1;
+    if (shape_rank == 4)
+      separator = 2;
+    else   
+      separator = 1;
   } else if (convention == "global.texture-nhwc") {
-    separator = 0;
+    separator = 2;
   } else {
     LOG(FATAL) << "Encountered unknown texture lowering convention: " << convention;
   }
@@ -78,9 +81,9 @@ Texture2DShape<T> ApplyTexture2DFlattening(const S& shape, size_t rank, size_t a
       << "Number of axes to flatten into rows must be less than shape rank for 2d flattening";
   Texture2DShape<T> texture{1, 1, 1, shape[rank - 1]};
   for (size_t i = 0; i < rank - 1; i++) {
-    if (i < axis) {
+    if (i < (axis-1)) {
       texture.depth *= shape[i];
-    } else if (i == axis) {
+    } else if (i < axis) {
       texture.height *= shape[i];
     } else {
       texture.width *= shape[i];

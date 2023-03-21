@@ -169,10 +169,10 @@ class TextureFlattener : public TextureLoweringBase {
     Array<PrimExpr> row_dims, row_indices, col_dims, col_indices, depth_dims, depth_indices;
     size_t axis = DefaultTextureLayoutSeparator(op->buffer->shape.size(), GetStorageScope(buffer));
     for (size_t i = 0; i < op->buffer->shape.size() - 1; i++) {
-      if (i < axis) {
+      if (i < (axis-1)) {
         depth_dims.push_back(op->buffer->shape[i]);
         depth_indices.push_back(op->indices[i]);
-      } else if (i == axis) {
+      } else if (i < axis) {
         col_dims.push_back(op->buffer->shape[i]);
         col_indices.push_back(op->indices[i]);
       } else {
@@ -183,9 +183,10 @@ class TextureFlattener : public TextureLoweringBase {
     PrimExpr row_offset = SimplifyOffset(row_dims, row_indices);
     PrimExpr col_offset = SimplifyOffset(col_dims, col_indices);
     PrimExpr depth_offset = SimplifyOffset(depth_dims, depth_indices);
-    args.push_back(depth_offset);
+
     args.push_back(row_offset);
     args.push_back(col_offset);
+    args.push_back(depth_offset);
     return args;
   }
 

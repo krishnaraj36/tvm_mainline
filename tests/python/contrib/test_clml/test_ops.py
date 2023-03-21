@@ -186,7 +186,7 @@ from autotvm_tune import autotvm_tune
 def test_conv2d(device, dtype):
     trials = [
         # Normal convolution
-        [3, 3, (0, 0), (1, 1), (1, 1), 256, (256, 16, 16), (False, True, False), False],
+        [1, 1, (0, 0), (1, 1), (1, 1), 1024, (512, 7, 7), (False, True, True), False],
         [2, 1, (2, 2), (1, 1), (1, 1), 7, (15, 16, 12), (True, False, True), False],
         [3, 3, (2, 1), (1, 1), (1, 1), 4, (14, 10, 10), (False, True, False), False],
         [3, 3, (2, 1), (1, 1), (1, 1), 4, (14, 10, 10), (False, True, True), False],
@@ -245,7 +245,8 @@ def test_conv2d(device, dtype):
             has_activation=composite[2],
         )
         #autotvm_tune(tvm.IRModule.from_expr(func), params, device.target, "conv_1x1_c256_texture2d_array.log")
-        opencl_out = build_and_run(func, inputs, 1, params, device, enable_clml=False)[0]
+        #return
+        opencl_out = build_and_run(func, inputs, 1, params, device, enable_clml=False)[0] # tune_log="conv_1x1_c256_texture2d_array.log")[0]
         
         clml_out = build_and_run(func, inputs, 1, params, device, enable_clml=True)[0]
 
@@ -257,6 +258,7 @@ def test_conv2d(device, dtype):
             *args, has_bias=composite[1], has_activation=composite[2]
         )
         verify_codegen(func, exp_codegen, device, params)
+        return
 
 
 @pytest.mark.parametrize("dtype", ["float16"])

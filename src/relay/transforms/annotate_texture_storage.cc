@@ -268,14 +268,16 @@ class StorageInfo : private transform::DeviceAwareExprVisitor {
       int d3r = a1 * a2 * a3;
       
       std::string scope = "global";
-      if (d1r < depth_limit)
+      if (d1r < depth_limit && a1 < spatial_limit && a2 < spatial_limit)
         scope += ".texture";
-      else if (a0 < depth_limit && d2r < spatial_limit)
-	scope += ".texture-weight";
       else if (a0 < spatial_limit && d3r < spatial_limit)
-	scope += ".texture-nhwc";
+        scope += ".texture-weight";
+      else if (a0 < depth_limit && a1 < spatial_limit && d2r < spatial_limit)
+        scope += ".texture-nhwc";
 
       return scope;
+
+
     }
     return "global";
   }

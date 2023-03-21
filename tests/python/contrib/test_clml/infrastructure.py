@@ -165,7 +165,6 @@ def build_and_run(
             err_msg += f"The test failed with the following parameters: {config}\n"
         err_msg += str(e)
         raise Exception(err_msg)
-    #print(libm.get_lib().imported_modules[0].get_source())
     lib = update_lib(libm, device.device, device.cross_compile)
     gen_module = graph_executor.GraphModule(lib["default"](device.device.cl(0)))
     gen_module.set_input(**inputs)
