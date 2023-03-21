@@ -184,6 +184,7 @@ def evaluate_network(network, target, target_host, dtype, repeat):
             )
 
     tmp = tempdir()
+
     filename = "%s.so" % network
     lib.export_library(tmp.relpath(filename), ndk.create_shared)
 
@@ -210,7 +211,7 @@ def evaluate_network(network, target, target_host, dtype, repeat):
         "%-20s %-19s (%s)"
         % (network + "-" + dtype, "%.2f ms" % np.mean(prof_res), "%.2f ms" % np.std(prof_res))
     )
-    return (np.mean(prof_res), np.std(prof_res))
+    return [ftimer().mean] #(np.mean(prof_res), np.std(prof_res))
 
 
 if __name__ == "__main__":
