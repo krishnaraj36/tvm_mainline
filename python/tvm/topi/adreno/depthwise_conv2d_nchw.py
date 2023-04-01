@@ -140,7 +140,7 @@ def depthwise_conv2d_nchwc(cfg, Input, Filter, stride, padding, dilation, out_dt
         stride_h,
         stride_w,
     )
-
+    #temp = Input
     ry = te.reduce_axis((0, kernel_h), name="ry")
     rx = te.reduce_axis((0, kernel_w), name="rx")
     conv = te.compute(
@@ -150,8 +150,8 @@ def depthwise_conv2d_nchwc(cfg, Input, Filter, stride, padding, dilation, out_dt
                 temp[
                     nn,
                     ffc // in_filter_channels,
-                    yy * stride_h + ry * dilation_h,
-                    xx * stride_w + rx * dilation_w,
+                    (yy) * stride_h + ry * dilation_h,
+                    (xx) * stride_w + rx * dilation_w,
                     ffb,
                 ]
                 * Filter[ffc // in_filter_channels, ffc % in_filter_channels, ry, rx, ffb]
@@ -252,10 +252,10 @@ def schedule_depthwise_conv2d_NCHWc_KCRSk(cfg, s, output):
 
     if autotvm.GLOBAL_SCOPE.in_tuning or len(latest.op.axis) == 4:
         # create cache stage for tuning only or in case of 4d case
-        AT = s.cache_read(pad_data, get_texture_storage(pad_data.shape), [conv])
+        AT = s.cache_read(pad_data, get_texture_storage(pad_data.shape, "activation"), [conv])
         bind_data_copy(s[AT])
         if kernel.shape[2] == 1 and kernel.shape[3] == 1:
-            WT = s.cache_read(kernel, get_texture_storage(kernel.shape), [conv])
+            WT = s.cache_read(kernel, get_texture_storage(kernel.shape, "weight"), [conv])
             bind_data_copy(s[WT])
 
     # tile and bind spatial axes

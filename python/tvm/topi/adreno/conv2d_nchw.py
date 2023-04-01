@@ -131,20 +131,20 @@ def conv2d_nchwc(cfg, Input, Filter, stride, padding, dilation, out_dtype):
         in_height, in_width, kernel_h, kernel_w, dilation_h, dilation_w, padding, stride_h, stride_w
     )
 
-    temp = add_pad(
-        Input,
-        "NCHW",
-        out_height_orig,
-        out_width_orig,
-        kernel_h,
-        kernel_w,
-        dilation_h,
-        dilation_w,
-        padding,
-        stride_h,
-        stride_w,
-    )
-
+    #temp = add_pad(
+    #    Input,
+    #    "NCHW",
+    #    out_height_orig,
+    #    out_width_orig,
+    #    kernel_h,
+    #    kernel_w,
+    #    dilation_h,
+    #    dilation_w,
+    #    padding,
+    #    stride_h,
+    #    stride_w,
+    #)
+    temp = Input
     rcc = te.reduce_axis((0, in_channel_chunks), name="rc")
     rcb = te.reduce_axis((0, in_channel_block), name="rc")
     ry = te.reduce_axis((0, kernel_h), name="ry")
@@ -154,7 +154,7 @@ def conv2d_nchwc(cfg, Input, Filter, stride, padding, dilation, out_dtype):
         (batch, out_channel_chunks, out_height, out_width, out_channel_block),
         lambda nn, ffc, yy, xx, ffb: te.sum(
             (
-                temp[nn, rcc, yy * stride_h + ry * dilation_h, xx * stride_w + rx * dilation_w, rcb]
+                temp[nn, rcc, yy * stride_h - padding[1] + ry * dilation_h, xx * stride_w - padding[0] + rx * dilation_w, rcb]
                 * Filter[ffc, rcc * in_channel_block + rcb, ry, rx, ffb]
             ).astype(out_dtype),
             axis=[rcc, rcb, ry, rx],
@@ -294,19 +294,19 @@ def schedule_conv2d_NCHWc_KCRSk(cfg, s, output):
                 pack_data = pad_data
                 bind_data_copy(s[pack_data])
 
-        AT = s.cache_read(pad_data, get_texture_storage(pad_data.shape), [conv])
+        AT = s.cache_read(pad_data, get_texture_storage(pad_data.shape, "activation"), [conv])
         bind_data_copy(s[AT])
     elif "pad_temp" in pad_data.op.name:
         s[pad_data].compute_inline()
         # create cache stage
-        AT = s.cache_read(pad_data, get_texture_storage(pad_data.shape), [conv])
+        AT = s.cache_read(pad_data, get_texture_storage(pad_data.shape, "activation"), [conv])
         bind_data_copy(s[AT])
 
     if autotvm.GLOBAL_SCOPE.in_tuning or filter_pack_rt:
         if not autotvm.GLOBAL_SCOPE.in_tuning:
             bind_data_copy(s[kernel])
         if kernel.shape[2] == 1 and kernel.shape[3] == 1:
-            WT = s.cache_read(kernel, get_texture_storage(kernel.shape), [conv])
+            WT = s.cache_read(kernel, get_texture_storage(kernel.shape, "weight"), [conv])
             bind_data_copy(s[WT])
 
     s[conv].set_scope("local")

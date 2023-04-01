@@ -153,7 +153,7 @@ class StorageInfo : private transform::DeviceAwareExprVisitor {
           if (call->checked_type().as<TensorTypeNode>()) {
             std::string scope = "global.texture";
             if (const auto* ttype = call->checked_type().as<TensorTypeNode>()) {
-              scope = Scope(ttype->shape, GetVirtualDevice(GetRef<Expr>(call)));
+              scope = Scope(ttype->shape, GetVirtualDevice(GetRef<Expr>(call)), "activation");
             }
             storage_scope_[call].push_back(scope);
           } else {
@@ -169,10 +169,14 @@ class StorageInfo : private transform::DeviceAwareExprVisitor {
           }
           const int weights_pos = 1;
           for (size_t i = 0; i < fn->params.size(); i++) {
+            std::string buffer_type = (
+              call->args[i]->IsInstance<ConstantNode>() ? "weight" : "activation"
+            );
             args_to_vars_[call->args[i]].push_back(fn->params[i]);
             // adding info about arguments if they can be converted to texture
             for (const auto& ttype : FlattenTupleType(fn->params[i]->checked_type())) {
-              std::string scope = Scope(ttype->shape, GetVirtualDevice(GetRef<Expr>(call)));
+              std::string scope = Scope(ttype->shape, GetVirtualDevice(GetRef<Expr>(call)),
+                                        buffer_type);
               if (expr_attrib.as<Conv2DAttrs>() || expr_attrib.as<Conv2DWinogradAttrs>()) {
                 if ((i == weights_pos) && !ttype->dtype.is_float16() &&
                     CanUseBuffers(call->args[i], ttype->shape, fn->attrs)) {
@@ -246,7 +250,7 @@ class StorageInfo : private transform::DeviceAwareExprVisitor {
    * @param vd VirtualDevice for the tensors determined of memory scope
    * @return string representing memory scope either "global" or "global.texture-layout"
    */
-  std::string Scope(Array<PrimExpr> shape, const VirtualDevice& vd) {
+  std::string Scope(Array<PrimExpr> shape, const VirtualDevice& vd, std::string buffer_type) {
     // currently we support only textures been made from 5d tensors
     // 5d requirement is not limitation of textures in general, it is limitation how
     // we are representing memory scopes/layout and flattening of textures in tir
@@ -262,18 +266,24 @@ class StorageInfo : private transform::DeviceAwareExprVisitor {
       int a1 = shape[1].as<IntImmNode>()->value;
       int a2 = shape[2].as<IntImmNode>()->value;
       int a3 = shape[3].as<IntImmNode>()->value;
-
+ 
       int d1r = a0 * a1;
       int d2r = a2 * a3;
       int d3r = a1 * a2 * a3;
       
       std::string scope = "global";
-      if (d1r < depth_limit && a1 < spatial_limit && a2 < spatial_limit)
-        scope += ".texture";
-      else if (a0 < spatial_limit && d3r < spatial_limit)
-        scope += ".texture-weight";
-      else if (a0 < depth_limit && a1 < spatial_limit && d2r < spatial_limit)
-        scope += ".texture-nhwc";
+
+      if (buffer_type == "activation") {
+        if (d1r < depth_limit && a1 < spatial_limit && a2 < spatial_limit)
+          scope += ".texture";
+      } else {  
+        if (a0 < spatial_limit && d3r < spatial_limit)
+          scope += ".texture-weight";
+        else if (a0 < depth_limit && a1 < spatial_limit && d2r < spatial_limit)
+          scope += ".texture-nhwc";
+        else if (d1r < depth_limit && a1 < spatial_limit && a2 < spatial_limit)
+          scope += ".texture";
+      }
 
       return scope;
 
@@ -291,8 +301,11 @@ class StorageInfo : private transform::DeviceAwareExprVisitor {
           << "Already propagated consumer scopes to input: " << GetRef<Expr>(expr);
 
       bool expr_is_rgba_vectorizable = false;
+      std::string buffer_type = (
+        expr->IsInstance<ConstantNode>() ? "weight" : "activation"
+      );
       if (const auto* ttype = expr->checked_type().as<TensorTypeNode>()) {
-        scope = Scope(ttype->shape, GetVirtualDevice(GetRef<Expr>(expr)));
+        scope = Scope(ttype->shape, GetVirtualDevice(GetRef<Expr>(expr)), buffer_type);
         if (scope != "global") {
           auto inner_dim = ttype->shape.back().as<IntImmNode>();
           if (inner_dim && inner_dim->value == 4) {

@@ -567,7 +567,7 @@ def bind_data_copy(stage, axis_to_vectorize=None):
             stage.bind(b, te.thread_axis("threadIdx.x"))
 
 
-def get_texture_storage(shape):
+def get_texture_storage(shape, buffer_type="weight"):
     """
     Returns the texture layout acceptable for the shape
 
@@ -585,14 +585,19 @@ def get_texture_storage(shape):
     d1r = shape[0] * shape[1];
     d2r = shape[2] * shape[3];
     d3r = shape[1] * shape[2] * shape[3];
-      
-    scope = "global";
-    if d1r < depth_limit:
-        scope += ".texture"
-    elif (shape[0] < depth_limit and d2r < spatial_limit):
-        scope += ".texture-weight"
-    elif (shape[0] < spatial_limit and d3r < spatial_limit):
-        scope += ".texture-nhwc"
+
+    scope = "global"
+
+    if buffer_type == "activation":
+        if (d1r < depth_limit):
+            scope += ".texture"
+    else:
+        if d3r < spatial_limit:
+            scope += ".texture-weight"
+        elif (shape[0] < depth_limit and d2r < spatial_limit):
+            scope += ".texture-nhwc"
+        elif d1r < depth_limit:
+            scope += ".texture"
 
     return scope
 

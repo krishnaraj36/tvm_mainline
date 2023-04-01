@@ -123,6 +123,13 @@ def tune_tasks(
     from tvm.autotvm.tuner import XGBTuner
 
     tmp_log_file = log_filename + ".tmp"
+    if os.path.exists(log_filename):
+        new_tasks = []
+        history = autotvm.record.ApplyHistoryBest(log_filename)
+        for task in tasks:
+            if history._query_inside(task.target, task.workload) is None:
+                new_tasks.append(task)
+        tasks = new_tasks
 
     for i, tsk in enumerate(reversed(tasks)):
         print("Task: ", tsk)

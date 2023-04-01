@@ -357,7 +357,7 @@ def schedule_conv2d_winograd(cfg, s, output, pre_computed):
     # probably will improve real topology execution
     if autotvm.GLOBAL_SCOPE.in_tuning:
         # Padding to texture
-        AA = s.cache_read(pad_data, get_texture_storage(pad_data.shape), [input_tile])
+        AA = s.cache_read(pad_data, get_texture_storage(pad_data.shape, "activation"), [input_tile])
         bind_data_copy(s[AA])
 
     s[input_tile].compute_inline()
