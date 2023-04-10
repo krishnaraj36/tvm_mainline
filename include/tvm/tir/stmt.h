@@ -214,72 +214,6 @@ class AssertStmt : public Stmt {
 };
 
 /*!
- * \brief Store value to the buffer.
- *
- *  Equivalent to ((DType*)buffer_var)[index] = value.
- *  where DType is the type specified by type().element_of().
- *
- *  For example, if type = float32x3, then the store will corresponds to
- *
- * \code
- *
- *  auto buffer = static_cast<float*>(buffer_var);
- *  buffer[index.v0] = value.v0;
- *  buffer[index.v1] = value.v1;
- *  buffer[index.v2] = value.v2;
- *
- * \endcode
- * \sa LoadNode
- */
-class StoreNode : public StmtNode {
- public:
-  /*! \brief The buffer variable. */
-  Var buffer_var;
-  /*! \brief The value to be stored. */
-  PrimExpr value;
-  /*! \brief The index locations to be stored. */
-  PrimExpr index;
-  /*! \brief The predicate to mask which lanes would be stored. */
-  PrimExpr predicate;
-
-  void VisitAttrs(AttrVisitor* v) {
-    v->Visit("buffer_var", &buffer_var);
-    v->Visit("value", &value);
-    v->Visit("index", &index);
-    v->Visit("predicate", &predicate);
-    v->Visit("span", &span);
-  }
-
-  bool SEqualReduce(const StoreNode* other, SEqualReducer equal) const {
-    return equal(buffer_var, other->buffer_var) && equal(value, other->value) &&
-           equal(index, other->index) && equal(predicate, other->predicate);
-  }
-
-  void SHashReduce(SHashReducer hash_reduce) const {
-    hash_reduce(buffer_var);
-    hash_reduce(value);
-    hash_reduce(index);
-    hash_reduce(predicate);
-  }
-
-  static constexpr const char* _type_key = "tir.Store";
-  TVM_DECLARE_FINAL_OBJECT_INFO(StoreNode, StmtNode);
-};
-
-/*!
- * \brief Managed reference to StoreNode.
- * \sa StoreNode
- */
-class Store : public Stmt {
- public:
-  TVM_DLL Store(Var buffer_var, PrimExpr value, PrimExpr index, PrimExpr predicate,
-                Span span = Span());
-
-  TVM_DEFINE_OBJECT_REF_METHODS(Store, Stmt, StoreNode);
-  TVM_DEFINE_OBJECT_REF_COW_METHOD(StoreNode);
-};
-
-/*!
  * \brief Store value to the high dimension buffer.
  *
  * \code
@@ -800,19 +734,33 @@ class SeqStmt : public Stmt {
    public:
     explicit Flattener(Array<Stmt>* seq) : seq_(seq) {}
 
-    void operator()(size_t i, const Stmt& stmt) const {
-      if (!stmt.defined()) return;
-      if (auto* op = stmt.as<SeqStmtNode>()) {
-        operator()(0, op->seq);
-      } else {
-        seq_->push_back(stmt);
-      }
-    }
-
     template <typename T>
-    void operator()(size_t i, const T& seq) const {
-      for (auto v : seq) {
-        this->operator()(0, v);
+    void operator()(size_t i, const T& stmt_or_seq) const {
+      if constexpr (std::is_base_of_v<ObjectRef, T>) {
+        // Early bail-out, applicable to any ObjectRef
+        if (!stmt_or_seq.defined()) return;
+      }
+
+      if constexpr (std::is_same_v<T, SeqStmt>) {
+        // No need for dynamic type-checking if the static type is a
+        // SeqStmt.
+        (*this)(0, stmt_or_seq->seq);
+      } else if constexpr (std::is_base_of_v<T, SeqStmt>) {
+        // Dynamic type-checking for a SeqStmt that could be
+        // flattened.
+        if (auto* op = stmt_or_seq.template as<SeqStmtNode>()) {
+          operator()(0, op->seq);
+        } else {
+          seq_->push_back(stmt_or_seq);
+        }
+      } else if constexpr (std::is_base_of_v<Stmt, T>) {
+        // Any other Stmt type just gets appended.
+        seq_->push_back(stmt_or_seq);
+      } else {
+        // Anything else is treated as an iterable of Stmt.
+        for (auto v : stmt_or_seq) {
+          this->operator()(0, v);
+        }
       }
     }
 
