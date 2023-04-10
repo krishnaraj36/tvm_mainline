@@ -898,6 +898,11 @@ class IterMapRewriter : public ExprMutator {
   PrimExpr SplitFloorModConst(IterSplitExpr lhs, PrimExpr base, PrimExpr rhs);
 
   static void AddToLhs(IterSumExprNode* lhs, IterSplitExpr rhs, int sign) {
+    if (sign < 0 && is_const_int(rhs->extent, 2)) {
+      lhs->base -= rhs->scale;
+      sign = 1;
+    }
+
     tir::ExprDeepEqual equal;
     for (size_t i = 0; i < lhs->args.size(); ++i) {
       IterSplitExpr lvalue = lhs->args[i];
@@ -2147,7 +2152,8 @@ class InverseAffineIterMapTransformer {
     // Case 1: Propagate to the input node directly when the sum expression has only one components
     if (iter_map_expr->args.size() == 1) {
       const auto& source = iter_map_expr->args[0];
-      backprop_.Set(source, backprop_.at(source) + input);
+      ICHECK(analyzer_->CanProveEqual(abs(source->scale), 1));
+      backprop_.Set(source, (backprop_.at(source) + input) * source->scale);
       return;
     }
 
