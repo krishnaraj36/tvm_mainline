@@ -156,50 +156,61 @@ def make_byoc_partition_rule(compiler):
     return _ffi_api.MakePatternBYOCPartitionRule(compiler, sub_rules)
 
 
-@register_func("tvm.relay.build_module.rewrite_io_layout")
-def rewrite_io_layout(mod):
+@register_func("relay.backend.collage.rewrite_io_layout")
+def rewrite_io_layout(config, mod):
     """ Return single layout graph by removing input/output 
         layout transform if input/output differs with graph layout """
-    class AlterInOutLayout(ExprMutator):
-
+    class RewriteInLayout(ExprMutator):
         def __init__(self):
             super().__init__()
-            self.hash_memo = []
-            
+            self.input_vars = []
 
         def visit_call(self, call):
             new_fn = self.visit(call.op)
             if (
-                hash(call) not in self.hash_memo
-                and isinstance(call.op, tvm.ir.expr.GlobalVar) == False
-                and call.op.name == "layout_transform"
-                and call.attrs["src_layout"] == "NCHW4c"
-            ):
-                call = call.args[0]
-            elif (
                 isinstance(call.op, tvm.ir.expr.GlobalVar) == False
                 and call.op.name == "layout_transform"
-                and call.attrs["dst_layout"] == "NCHW4c"
                 and isinstance(call.args[0], Var)
+                and call.args[0].name_hint in self.input_vars
             ):
                 return relay.var(call.args[0].name_hint, call.checked_type)
             
-            args =[]
-            for arg in call.args:
-                self.hash_memo.append(hash(arg))
-                args.append(self.visit(arg))
+            args = [self.visit(arg) for arg in call.args]
 
-            return Call(call.op, args, call.attrs)
+            return Call(new_fn, args, call.attrs)
 
         def __call__(self, mod):
+            for p in mod["main"].params:
+                self.input_vars.append(p.name_hint)
             func = self.visit(mod["main"].body)
             mod = IRModule.from_expr(func)
             return mod
 
+    class RewriteOutLayout(ExprMutator):
+        def __init__(self):
+            super().__init__()
+
+        def visit_call(self, call):
+            if (isinstance(call.op, tvm.ir.expr.GlobalVar) == False
+                and call.op.name == "layout_transform"):
+
+                return call.args[0]
+
+            return call 
+
+        def __call__(self, mod):
+            func = self.visit(mod["main"])
+            mod = IRModule.from_expr(func.body)
+            return mod
+
     new_mod = relay.transform.DefuseOps()(mod)
-    new_mod = AlterInOutLayout()(new_mod)
+    print(new_mod)
+    new_mod = RewriteInLayout()(new_mod)
+    new_mod = RewriteOutLayout()(new_mod)
+    print(new_mod)
     new_mod = relay.transform.FuseOps()(relay.transform.InferType()(new_mod))
     mod["main"] = new_mod["main"]
+    mod = relay.transform.PlanDevices(config)(mod)
     return mod
 
 @register_func("tvm.relay.collage.optimize_batchnorm")

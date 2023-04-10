@@ -306,17 +306,21 @@ def just_tvm(model):
 
 
 def get_model(model_name, dtype):
-
+    input_shape = [1, 3, 224, 224]
     if "mobilenet" in model_name:
         mod, params = testing.mobilenet.get_workload(batch_size=1, dtype=dtype)
     elif "resnet" in model_name:
         mod, params = testing.resnet.get_workload(num_layers=50, batch_size=1, dtype=dtype)
+    elif model_name == "inception_v3":
+        input_shape = [1, 3, 299, 299]
+        mod, params = testing.inception_v3.get_workload(batch_size=1, dtype=dtype)
+
     if params:
         mod["main"] = bind_params_by_name(mod["main"], params)
         mod = tvm.relay.transform.FoldConstant()(mod)
     return {
         "name": model_name,
-        "input_shapes": {"data": [1, 3, 224, 224]},
+        "input_shapes": {"data": input_shape},
         "input_dtypes": {"data": dtype},
         "mod": mod,
         "params": params,
@@ -345,5 +349,14 @@ def run_mobilenetv1(dtype):
     collage(get_model("mobilenet", dtype))
 
 
+@pytest.mark.parametrize("dtype", ["float32"])
+@tvm.testing.requires_openclml
+def run_inceptionv3(dtype):
+
+    just_clml(get_model("inception_v3", dtype))
+    just_tvm(get_model("inception_v3", dtype))
+    """Run Collage for tvm and clml compiler target."""
+    collage(get_model("inception_v3", dtype))
+
 if __name__ == "__main__":
-    run_mobilenetv1("float32")
+    run_inceptionv3("float32")

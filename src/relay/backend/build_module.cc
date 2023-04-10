@@ -362,9 +362,8 @@ class RelayBuildModule : public runtime::ModuleNode {
     // Do layout rewrite for collage tuning
     if (backend::IsCollageTuneEnable()) {
     static const runtime::PackedFunc* pf =
-      runtime::Registry::Get("tvm.relay.build_module.rewrite_io_layout");
-    relay_module = (*pf)(relay_module);
-    relay_module = transform::PlanDevices(config_)(relay_module);
+      runtime::Registry::Get("relay.backend.collage.rewrite_io_layout");
+    relay_module = (*pf)(config_, relay_module);
     }
     // Do layout rewrite for auto-scheduler.
     if (backend::IsAutoSchedulerEnabled() && config_->optional_homogeneous_target.defined()) {
