@@ -359,4 +359,4 @@ def run_inceptionv3(dtype):
     collage(get_model("inception_v3", dtype))
 
 if __name__ == "__main__":
-    run_inceptionv3("float32")
+    run_mobilenetv1("float32")

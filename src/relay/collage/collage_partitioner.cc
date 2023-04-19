@@ -321,13 +321,8 @@ transform::Pass CollagePartition(CompilationConfig config, CostEstimator cost_es
 
         // Enable collage tuning flag to penalize context switch cost in subgraphs
         ctxt->config.Set("relay.backend.collage_in_tuning", Bool(true));
- 
-        // Optimize batchnorm to fuse with conv layer or convert to mul+add op
-        static const runtime::PackedFunc* pf =
-            runtime::Registry::Get("tvm.relay.collage.optimize_batchnorm");
-        ICHECK(pf);
-        mod = (*pf)(mod);
 
+        // Applying span indexes to graph 
         mod = transform::CapturePostDfsIndexInSpans()(mod);
 
         Array<PartitionSpec> partition_specs = GatherPartitionSpecs(config);
